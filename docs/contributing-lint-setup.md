@@ -41,7 +41,7 @@ make install-hooks
 Run these from the repository root:
 
 ```bash
-make lint           # Auto-fix lint issues across core/, tools/, exports/
+make lint           # Auto-fix lint issues across core/ and tools/
 make format         # Apply ruff formatting
 make check          # Dry-run check (same as CI) — no files modified
 make test           # Run the test suite
@@ -59,6 +59,8 @@ After running `make install-hooks`, every `git commit` will automatically:
 
 1. **Lint** staged Python files with `ruff check --fix`
 2. **Format** staged Python files with `ruff format`
+
+Hooks are scoped per package — `core/` files use `core/pyproject.toml` and `tools/` files use `tools/pyproject.toml`. This ensures each package's `known-first-party` imports are sorted correctly.
 
 If ruff modifies a file, the commit is aborted so you can review and re-stage. This is intentional — it prevents unlinted code from entering the repository.
 
@@ -81,6 +83,7 @@ Once installed, the editor will:
 - **Format on save** using ruff
 - **Auto-fix lint issues** on save (import sorting, fixable violations)
 - Show a **ruler at column 100**
+- **Resolve imports** for both `framework` and `aden_tools` via `python.analysis.extraPaths`
 
 No manual configuration needed.
 
@@ -109,8 +112,8 @@ The `.cursorrules` file at the repo root tells Cursor's AI the project's style r
 Every push and PR to `main` runs the `Lint Python` job in GitHub Actions (`.github/workflows/ci.yml`):
 
 ```
-ruff check   → core/, tools/, exports/
-ruff format  → core/, tools/, exports/ (--check mode, no modifications)
+ruff check   → core/, tools/
+ruff format  → core/, tools/ (--check mode, no modifications)
 ```
 
 Both must pass. If CI fails:
@@ -127,16 +130,17 @@ make check    # Verify locally before pushing
 
 | File | Scope |
 |------|-------|
-| `core/pyproject.toml` `[tool.ruff]` | Ruff rules for `core/` and `exports/` |
-| `tools/pyproject.toml` `[tool.ruff]` | Ruff rules for `tools/` (mirrors core, first-party = `aden_tools`) |
+| `core/pyproject.toml` `[tool.ruff]` | Ruff rules for `core/` (first-party = `framework`) |
+| `tools/pyproject.toml` `[tool.ruff]` | Ruff rules for `tools/` (first-party = `aden_tools`) |
 | `.editorconfig` | Editor-agnostic formatting defaults |
-| `.pre-commit-config.yaml` | Pre-commit hook definitions |
-| `.vscode/settings.json` | VS Code ruff integration |
+| `.pre-commit-config.yaml` | Pre-commit hook definitions (scoped per package) |
+| `.vscode/settings.json` | VS Code ruff integration + Pylance extraPaths |
 | `.vscode/extensions.json` | Recommended VS Code extensions |
 | `.cursorrules` | AI assistant context |
 | `.claude/settings.json` | Claude Code post-edit hooks |
+| `pyrightconfig.json` | Pylance/Pyright import resolution |
 
-The single source of truth for lint rules is the `[tool.ruff]` section in each package's `pyproject.toml`. All other configs (VS Code, pre-commit, Makefile, CI) reference these.
+The single source of truth for lint rules is the `[tool.ruff]` section in each package's `pyproject.toml`. All other configs (VS Code, pre-commit, Makefile, CI) defer to these.
 
 ---
 
