@@ -370,11 +370,17 @@ class GraphExecutor:
                         # Retry - don't increment steps for retries
                         steps -= 1
 
-                        # --- EXPONENTIAL BACKOFF ---
+                        # --- BACKOFF: prefer Retry-After from provider, else exponential ---
                         retry_count = node_retry_counts[current_node_id]
-                        # Backoff formula: 1.0 * (2^(retry - 1)) -> 1s, 2s, 4s...
-                        delay = 1.0 * (2 ** (retry_count - 1))
-                        self.logger.info(f"   Using backoff: Sleeping {delay}s before retry...")
+                        if result.retry_after is not None and result.retry_after > 0:
+                            delay = result.retry_after
+                            self.logger.info(
+                                f"   Using Retry-After from provider: sleeping {delay:.1f}s before retry..."
+                            )
+                        else:
+                            # Exponential backoff: 1s, 2s, 4s...
+                            delay = 1.0 * (2 ** (retry_count - 1))
+                            self.logger.info(f"   Using exponential backoff: sleeping {delay}s before retry...")
                         await asyncio.sleep(delay)
                         # --------------------------------------
 
@@ -902,9 +908,20 @@ class GraphExecutor:
                         )
                         return branch, result
 
-                    self.logger.warning(
-                        f"      ↻ Branch {node_spec.name}: retry {attempt + 1}/{node_spec.max_retries}"
-                    )
+                    # Backoff: prefer Retry-After from provider, else exponential
+                    if result.retry_after is not None and result.retry_after > 0:
+                        delay = result.retry_after
+                        self.logger.warning(
+                            f"      ↻ Branch {node_spec.name}: retry {attempt + 1}/{node_spec.max_retries} "
+                            f"(Retry-After: {delay:.1f}s)"
+                        )
+                    else:
+                        delay = 1.0 * (2 ** attempt)
+                        self.logger.warning(
+                            f"      ↻ Branch {node_spec.name}: retry {attempt + 1}/{node_spec.max_retries} "
+                            f"(backoff: {delay}s)"
+                        )
+                    await asyncio.sleep(delay)
 
                 # All retries exhausted
                 branch.status = "failed"

@@ -152,16 +152,39 @@ def register_tools(mcp: FastMCP) -> None:
             if response.status_code != 200:
                 return {"error": f"HTTP {response.status_code}: Failed to fetch URL"}
 
-            # --- START FIX: Validate Content-Type ---
-            # Added validation to prevent parsing non-HTML content (like JSON, PDF, Images)
+            # Check Content-Type: handle JSON directly, skip binary content
             content_type = response.headers.get("content-type", "").lower()
-            if not any(t in content_type for t in ["text/html", "application/xhtml+xml"]):
+            if "application/json" in content_type:
+                # Return JSON content directly as text
+                import json as _json
+                try:
+                    json_data = response.json()
+                    json_text = _json.dumps(json_data, indent=2)
+                    if len(json_text) > max_length:
+                        json_text = json_text[:max_length] + "..."
+                    return {
+                        "url": str(response.url),
+                        "title": "",
+                        "description": "JSON response",
+                        "content": json_text,
+                        "length": len(json_text),
+                        "content_type": "application/json",
+                    }
+                except Exception:
+                    return {
+                        "url": str(response.url),
+                        "title": "",
+                        "description": "JSON response",
+                        "content": response.text[:max_length],
+                        "length": len(response.text[:max_length]),
+                        "content_type": "application/json",
+                    }
+            elif not any(t in content_type for t in ["text/html", "application/xhtml+xml"]):
                 return {
                     "error": f"Skipping non-HTML content (Content-Type: {content_type})",
                     "url": url,
                     "skipped": True
                 }
-            # --- END FIX ---
 
             # Parse HTML
             soup = BeautifulSoup(response.text, "html.parser")

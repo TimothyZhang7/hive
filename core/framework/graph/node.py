@@ -17,6 +17,7 @@ Protocol:
 
 import asyncio
 import logging
+import re
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -28,6 +29,34 @@ from framework.llm.provider import LLMProvider, Tool
 from framework.runtime.core import Runtime
 
 logger = logging.getLogger(__name__)
+
+
+def _extract_retry_after(exc: Exception) -> float | None:
+    """Extract Retry-After delay (in seconds) from an exception.
+
+    Checks:
+    1. response.headers for 'retry-after' or 'x-ratelimit-reset-after'
+    2. The error message for 'try again in Xs' patterns
+    """
+    # Try HTTP response headers first (litellm exceptions carry httpx.Response)
+    response = getattr(exc, "response", None)
+    if response is not None:
+        headers = getattr(response, "headers", {})
+        for header in ("retry-after", "x-ratelimit-reset-after"):
+            value = headers.get(header)
+            if value is not None:
+                try:
+                    return float(value)
+                except (ValueError, TypeError):
+                    pass
+
+    # Fall back to parsing the error message
+    msg = str(exc)
+    match = re.search(r"try again in (\d+(?:\.\d+)?)\s*s", msg, re.IGNORECASE)
+    if match:
+        return float(match.group(1))
+
+    return None
 
 
 def _fix_unescaped_newlines_in_json(json_str: str) -> str:
@@ -477,6 +506,9 @@ class NodeResult:
     # Metadata
     tokens_used: int = 0
     latency_ms: int = 0
+
+    # Retry-After delay (seconds) extracted from rate limit errors
+    retry_after: float | None = None
 
     # Pydantic validation errors (if any)
     validation_errors: list[str] = field(default_factory=list)
@@ -1035,7 +1067,10 @@ Keep the same JSON structure but with shorter content values.
                 error=str(e),
                 latency_ms=latency_ms,
             )
-            return NodeResult(success=False, error=str(e), latency_ms=latency_ms)
+            retry_after = _extract_retry_after(e)
+            return NodeResult(
+                success=False, error=str(e), latency_ms=latency_ms, retry_after=retry_after
+            )
 
     def _parse_output(self, content: str, node_spec: NodeSpec) -> dict[str, Any]:
         """
@@ -1520,9 +1555,19 @@ Respond with ONLY a JSON object:
                 logger.info(f"         Reason: {reasoning}")
 
                 # Find the target for this choice
-                target = ctx.node_spec.routes.get(
-                    chosen, ctx.node_spec.routes.get("default", "end")
-                )
+                if chosen in ctx.node_spec.routes:
+                    # LLM returned a route key (e.g. "file_ops")
+                    target = ctx.node_spec.routes[chosen]
+                else:
+                    # LLM may have returned a target node name (e.g. "file_ops_approval")
+                    # Reverse-lookup: find the route key whose target matches
+                    reverse = {v: k for k, v in ctx.node_spec.routes.items()}
+                    if chosen in reverse:
+                        target = chosen
+                        chosen = reverse[chosen]
+                    else:
+                        target = ctx.node_spec.routes.get("default", "end")
+                        chosen = "default"
                 return (chosen, target)
 
         except Exception as e:
@@ -1600,7 +1645,18 @@ class FunctionNode(NodeProtocol):
 
             # Write to output keys
             output = {}
-            if ctx.node_spec.output_keys:
+            if isinstance(result, dict) and ctx.node_spec.output_keys:
+                # Unpack dict result into matching output keys
+                for key in ctx.node_spec.output_keys:
+                    if key in result:
+                        output[key] = result[key]
+                        ctx.memory.write(key, result[key])
+                # Also write any extra keys from result not in output_keys
+                for key, value in result.items():
+                    if key not in output:
+                        output[key] = value
+                        ctx.memory.write(key, value)
+            elif ctx.node_spec.output_keys:
                 key = ctx.node_spec.output_keys[0]
                 output[key] = result
                 ctx.memory.write(key, result)
@@ -1617,4 +1673,7 @@ class FunctionNode(NodeProtocol):
                 error=str(e),
                 latency_ms=latency_ms,
             )
-            return NodeResult(success=False, error=str(e), latency_ms=latency_ms)
+            retry_after = _extract_retry_after(e)
+            return NodeResult(
+                success=False, error=str(e), latency_ms=latency_ms, retry_after=retry_after
+            )

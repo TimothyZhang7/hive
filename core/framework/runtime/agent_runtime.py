@@ -99,6 +99,7 @@ class AgentRuntime:
         llm: "LLMProvider | None" = None,
         tools: list["Tool"] | None = None,
         tool_executor: Callable | None = None,
+        node_registry: dict | None = None,
         config: AgentRuntimeConfig | None = None,
     ):
         """
@@ -111,6 +112,7 @@ class AgentRuntime:
             llm: LLM provider for nodes
             tools: Available tools
             tool_executor: Function to execute tools
+            node_registry: Custom node implementations by ID (for function nodes)
             config: Optional runtime configuration
         """
         self.graph = graph
@@ -133,6 +135,7 @@ class AgentRuntime:
         self._llm = llm
         self._tools = tools or []
         self._tool_executor = tool_executor
+        self._node_registry = node_registry or {}
 
         # Entry points and streams
         self._entry_points: dict[str, EntryPointSpec] = {}
@@ -210,6 +213,7 @@ class AgentRuntime:
                     llm=self._llm,
                     tools=self._tools,
                     tool_executor=self._tool_executor,
+                    node_registry=self._node_registry,
                     result_retention_max=self._config.execution_result_max,
                     result_retention_ttl_seconds=self._config.execution_result_ttl_seconds,
                 )
@@ -428,6 +432,7 @@ def create_agent_runtime(
     llm: "LLMProvider | None" = None,
     tools: list["Tool"] | None = None,
     tool_executor: Callable | None = None,
+    node_registry: dict | None = None,
     config: AgentRuntimeConfig | None = None,
 ) -> AgentRuntime:
     """
@@ -443,6 +448,7 @@ def create_agent_runtime(
         llm: LLM provider
         tools: Available tools
         tool_executor: Tool executor function
+        node_registry: Custom node implementations by ID (for function nodes)
         config: Runtime configuration
 
     Returns:
@@ -455,6 +461,7 @@ def create_agent_runtime(
         llm=llm,
         tools=tools,
         tool_executor=tool_executor,
+        node_registry=node_registry,
         config=config,
     )
 
