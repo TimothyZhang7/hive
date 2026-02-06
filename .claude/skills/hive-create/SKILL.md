@@ -501,6 +501,45 @@ result = await executor.execute(graph=graph, goal=goal, input_data=input_data)
 
 ---
 
+## Importing Exported Agents
+
+You can import an exported agent back into a build session for editing:
+
+```python
+mcp__agent-builder__import_from_exports(
+    agent_path="exports/my_agent",
+    session_name="my_agent_v2"  # Optional, defaults to agent name
+)
+```
+
+**Returns:**
+```json
+{
+  "success": true,
+  "session_id": "build_20260205_143045",
+  "name": "my_agent_v2",
+  "nodes_imported": 4,
+  "edges_imported": 3,
+  "goal_imported": true,
+  "mcp_servers_imported": 1,
+  "message": "Successfully imported agent from 'exports/my_agent' into session 'build_20260205_143045'. You can now edit this agent using hive-create tools."
+}
+```
+
+**Use cases:**
+- **Re-edit an exported agent** - Make changes after export without rebuilding from scratch
+- **Load agents from others** - Import agents built by teammates or from examples
+- **Recover deleted sessions** - Restore build sessions from exported agents
+- **Version control workflow** - Check out different versions of an agent from git
+
+**After importing:**
+1. The session becomes active automatically
+2. Use `mcp__agent-builder__get_session_status()` to inspect what was imported
+3. Edit with `update_node`, `add_node`, `add_edge`, etc.
+4. Re-export with `export_graph()` when done
+
+---
+
 ## COMMON MISTAKES TO AVOID
 
 1. **Using tools that don't exist** - Always check `mcp__agent-builder__list_mcp_tools()` first

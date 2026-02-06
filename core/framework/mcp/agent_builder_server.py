@@ -3890,6 +3890,117 @@ def verify_credentials(
         return json.dumps({"error": str(e)})
 
 
+@mcp.tool()
+def import_from_exports(
+    agent_path: Annotated[str, "Path to the exported agent directory (e.g., 'exports/my-agent')"],
+    session_name: Annotated[str, "Optional name for the imported session"] = "",
+) -> str:
+    """
+    Import an exported agent back into a build session.
+
+    Reads agent.json and mcp_servers.json from the exports directory and reconstructs
+    a BuildSession that can be edited with hive-create tools.
+
+    This is useful for:
+    - Re-editing an agent after it's been exported
+    - Loading agents built by others
+    - Recovering if build sessions were deleted
+    - Working with agents from version control
+
+    Returns the session_id that can be used with load_session_by_id.
+    """
+    global _session
+
+    try:
+        from pathlib import Path
+
+        # Validate agent path
+        path = Path(agent_path)
+        if not path.exists():
+            return json.dumps({"success": False, "error": f"Agent path '{agent_path}' not found"})
+
+        agent_json_path = path / "agent.json"
+        if not agent_json_path.exists():
+            return json.dumps(
+                {"success": False, "error": f"agent.json not found in '{agent_path}'"}
+            )
+
+        # Load agent.json
+        with open(agent_json_path) as f:
+            agent_data = json.load(f)
+
+        # Extract agent name from path or agent_data
+        agent_name = session_name or agent_data.get("agent", {}).get("id") or path.name
+
+        # Create new session
+        _session = BuildSession(name=agent_name)
+
+        # Import goal
+        if "goal" in agent_data:
+            goal_dict = agent_data["goal"]
+            _session.goal = Goal.model_validate(goal_dict)
+
+        # Import nodes
+        if "graph" in agent_data and "nodes" in agent_data["graph"]:
+            for node_dict in agent_data["graph"]["nodes"]:
+                node = NodeSpec.model_validate(node_dict)
+                _session.nodes.append(node)
+
+        # Import edges
+        if "graph" in agent_data and "edges" in agent_data["graph"]:
+            for edge_dict in agent_data["graph"]["edges"]:
+                # Convert edge dict to EdgeSpec
+                edge = EdgeSpec(
+                    id=edge_dict["id"],
+                    source=edge_dict["source"],
+                    target=edge_dict["target"],
+                    condition=EdgeCondition(edge_dict.get("condition", "on_success")),
+                    condition_expr=edge_dict.get("condition_expr"),
+                    priority=edge_dict.get("priority", 0),
+                    input_mapping=edge_dict.get("input_mapping", {}),
+                )
+                _session.edges.append(edge)
+
+        # Import loop config
+        if "graph" in agent_data and "loop_config" in agent_data["graph"]:
+            _session.loop_config = agent_data["graph"]["loop_config"]
+
+        # Import MCP servers if mcp_servers.json exists
+        mcp_servers_path = path / "mcp_servers.json"
+        if mcp_servers_path.exists():
+            with open(mcp_servers_path) as f:
+                mcp_data = json.load(f)
+                _session.mcp_servers = mcp_data.get("mcpServers", [])
+
+        # Save session
+        _save_session(_session)
+
+        # Set as active session
+        with atomic_write(ACTIVE_SESSION_FILE) as f:
+            f.write(_session.id)
+
+        return json.dumps(
+            {
+                "success": True,
+                "session_id": _session.id,
+                "name": _session.name,
+                "imported_from": str(agent_path),
+                "nodes_imported": len(_session.nodes),
+                "edges_imported": len(_session.edges),
+                "goal_imported": _session.goal is not None,
+                "mcp_servers_imported": len(_session.mcp_servers),
+                "message": (
+                    f"Successfully imported agent from '{agent_path}' "
+                    f"into session '{_session.id}'. "
+                    f"You can now edit this agent using hive-create tools."
+                ),
+            }
+        )
+
+    except Exception as e:
+        return json.dumps({"success": False, "error": f"Failed to import agent: {e}"})
+
+
 # =============================================================================
 # MAIN
 # =============================================================================
