@@ -58,6 +58,35 @@ def get_api_key() -> str | None:
     return None
 
 
+def get_light_llm_config() -> dict[str, Any]:
+    """Return the light_llm config for cheap operations (ADAPT.md, summaries).
+
+    Reads from ``~/.hive/configuration.json`` under the ``"light_llm"`` key.
+    Falls back to the main ``"llm"`` config if ``"light_llm"`` is not set.
+
+    Returns dict with keys: model, api_key, max_tokens.
+    """
+    config = get_hive_config()
+    light = config.get("light_llm", {})
+
+    # Fall back to main llm config if light_llm not configured
+    if not light.get("model"):
+        light = config.get("llm", {})
+
+    model = None
+    if light.get("provider") and light.get("model"):
+        model = f"{light['provider']}/{light['model']}"
+
+    api_key = None
+    api_key_env_var = light.get("api_key_env_var")
+    if api_key_env_var:
+        api_key = os.environ.get(api_key_env_var)
+
+    max_tokens = int(light.get("max_tokens", 512))
+
+    return {"model": model, "api_key": api_key, "max_tokens": max_tokens}
+
+
 # ---------------------------------------------------------------------------
 # RuntimeConfig – shared across agent templates
 # ---------------------------------------------------------------------------

@@ -62,20 +62,28 @@ def build_narrative(
     memory: SharedMemory,
     execution_path: list[str],
     graph: GraphSpec,
+    execution_narrative: str = "",
 ) -> str:
     """Build Layer 2 (narrative) from structured state.
 
-    Deterministic — no LLM call. Reads SharedMemory and execution path
-    to describe what has happened so far. Cheap and fast.
+    When execution_narrative is provided (from ADAPT.md files), uses it
+    directly. Otherwise falls back to deterministic description from
+    SharedMemory and execution path.
 
     Args:
         memory: Current shared memory state.
         execution_path: List of node IDs visited so far.
         graph: Graph spec (for node names/descriptions).
+        execution_narrative: Pre-built narrative from ADAPT.md files.
 
     Returns:
         Narrative string describing the session state.
     """
+    # Use ADAPT narrative when available
+    if execution_narrative:
+        return execution_narrative
+
+    # Deterministic fallback: list phases and memory key:value pairs
     parts: list[str] = []
 
     # Describe execution path
@@ -112,6 +120,7 @@ def build_transition_marker(
     memory: SharedMemory,
     cumulative_tool_names: list[str],
     data_dir: Path | str | None = None,
+    latest_adapt: str | None = None,
 ) -> str:
     """Build a 'State of the World' transition marker.
 
@@ -125,6 +134,7 @@ def build_transition_marker(
         memory: Current shared memory state.
         cumulative_tool_names: All tools available (cumulative set).
         data_dir: Path to spillover data directory.
+        latest_adapt: Optional ADAPT.md content from the completed node.
 
     Returns:
         Transition marker message text.
@@ -174,11 +184,15 @@ def build_transition_marker(
     sections.append(f"\nNow entering: {next_node.name}")
     sections.append(f"  {next_node.description}")
 
-    # Reflection prompt (engineered metacognition)
-    sections.append(
-        "\nBefore proceeding, briefly reflect: what went well in the "
-        "previous phase? Are there any gaps or surprises worth noting?"
-    )
+    # Phase reflection: use ADAPT.md content when available,
+    # otherwise fall back to generic metacognition prompt
+    if latest_adapt:
+        sections.append(f"\nPhase reflection:\n{latest_adapt}")
+    else:
+        sections.append(
+            "\nBefore proceeding, briefly reflect: what went well in the "
+            "previous phase? Are there any gaps or surprises worth noting?"
+        )
 
     sections.append("\n--- END TRANSITION ---")
 

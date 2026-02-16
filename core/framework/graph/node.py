@@ -498,6 +498,9 @@ class NodeContext:
     inherited_conversation: Any = None  # NodeConversation | None (from prior node)
     cumulative_output_keys: list[str] = field(default_factory=list)  # All output keys from path
 
+    # Running narrative from prior phases' ADAPT.md files (read-only)
+    execution_narrative: str = ""
+
 
 @dataclass
 class NodeResult:

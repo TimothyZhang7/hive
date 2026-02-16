@@ -19,6 +19,12 @@ from typing import Any
 
 from framework.graph.checkpoint_config import CheckpointConfig
 from framework.graph.edge import EdgeCondition, EdgeSpec, GraphSpec
+from framework.graph.execution_memory import (
+    generate_node_adapt,
+    read_adapt_narrative,
+    read_single_adapt,
+    write_adapt,
+)
 from framework.graph.goal import Goal
 from framework.graph.node import (
     FunctionNode,
@@ -690,6 +696,9 @@ class GraphExecutor:
                     inherited_conversation=continuous_conversation if is_continuous else None,
                     override_tools=cumulative_tools if is_continuous else None,
                     cumulative_output_keys=cumulative_output_keys if is_continuous else None,
+                    execution_narrative=(
+                        read_adapt_narrative(self._storage_path, path) if self._storage_path else ""
+                    ),
                 )
 
                 # Log actual input data being read
@@ -817,6 +826,32 @@ class GraphExecutor:
                     if result.output:
                         for key, value in result.output.items():
                             memory.write(key, value, validate=False)
+
+                    # Generate ADAPT.md reflection
+                    try:
+                        previous_adapts: list[tuple[str, str]] = []
+                        if self._storage_path:
+                            for prev_id in path[:-1]:
+                                content = read_single_adapt(self._storage_path, prev_id)
+                                prev_spec = graph.get_node(prev_id)
+                                if content and prev_spec:
+                                    previous_adapts.append((prev_spec.name, content))
+
+                        adapt_content = await generate_node_adapt(
+                            llm=self.llm,
+                            node_spec=node_spec,
+                            result=result,
+                            memory=memory,
+                            execution_path=path,
+                            goal=goal,
+                            visit_number=node_visit_counts.get(current_node_id, 1),
+                            previous_adapts=previous_adapts,
+                        )
+                        if self._storage_path:
+                            write_adapt(self._storage_path, current_node_id, adapt_content)
+                        self.logger.info(f"   ADAPT: {adapt_content[:100]}")
+                    except Exception as e:
+                        self.logger.warning(f"   ADAPT generation failed (non-critical): {e}")
                 else:
                     self.logger.error(f"   ✗ Failed: {result.error}")
 
@@ -1149,7 +1184,12 @@ class GraphExecutor:
                         current_node_id = next_node
 
                 # Write progress snapshot at node transition
-                self._write_progress(current_node_id, path, memory, node_visit_counts)
+                self._write_progress(
+                    current_node_id,
+                    path,
+                    memory,
+                    node_visit_counts,
+                )
 
                 # Continuous mode: thread conversation forward with transition marker
                 if is_continuous and result.conversation is not None:
@@ -1165,7 +1205,17 @@ class GraphExecutor:
                         )
 
                         # Build Layer 2 (narrative) from current state
-                        narrative = build_narrative(memory, path, graph)
+                        adapt_narrative = (
+                            read_adapt_narrative(self._storage_path, path)
+                            if self._storage_path
+                            else ""
+                        )
+                        narrative = build_narrative(
+                            memory,
+                            path,
+                            graph,
+                            execution_narrative=adapt_narrative,
+                        )
 
                         # Compose new system prompt (Layer 1 + 2 + 3)
                         new_system = compose_system_prompt(
@@ -1195,6 +1245,11 @@ class GraphExecutor:
                             memory=memory,
                             cumulative_tool_names=sorted(cumulative_tool_names),
                             data_dir=data_dir,
+                            latest_adapt=(
+                                read_single_adapt(self._storage_path, node_spec.id)
+                                if self._storage_path
+                                else None
+                            ),
                         )
                         await continuous_conversation.add_user_message(
                             marker,
@@ -1430,6 +1485,7 @@ class GraphExecutor:
         inherited_conversation: Any = None,
         override_tools: list | None = None,
         cumulative_output_keys: list[str] | None = None,
+        execution_narrative: str = "",
     ) -> NodeContext:
         """Build execution context for a node."""
         # Filter tools to those available to this node
@@ -1463,6 +1519,7 @@ class GraphExecutor:
             continuous_mode=continuous_mode,
             inherited_conversation=inherited_conversation,
             cumulative_output_keys=cumulative_output_keys or [],
+            execution_narrative=execution_narrative,
         )
 
     # Valid node types - no ambiguous "llm" type allowed

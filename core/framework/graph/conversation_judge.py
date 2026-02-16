@@ -38,6 +38,7 @@ async def evaluate_phase_completion(
     success_criteria: str,
     accumulator_state: dict[str, Any],
     max_history_tokens: int = 8_196,
+    execution_narrative: str = "",
 ) -> PhaseVerdict:
     """Level 2 judge: read the conversation and evaluate quality.
 
@@ -64,6 +65,13 @@ async def evaluate_phase_completion(
         "Be concise. Evaluate based on the success criteria, not on style."
     )
 
+    # Include execution narrative context when available
+    narrative_section = ""
+    if execution_narrative:
+        narrative_section = (
+            f"\nEXECUTION CONTEXT (what happened before this phase):\n{execution_narrative}\n"
+        )
+
     user_prompt = f"""Evaluate this phase:
 
 PHASE: {phase_name}
@@ -74,7 +82,7 @@ SUCCESS CRITERIA:
 
 OUTPUTS SET:
 {outputs_summary}
-
+{narrative_section}
 RECENT CONVERSATION:
 {recent_messages}
 

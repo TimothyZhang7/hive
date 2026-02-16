@@ -1552,6 +1552,8 @@ class EventLoopNode(NodeProtocol):
                 "missing_keys": self._get_missing_output_keys(
                     accumulator, ctx.node_spec.output_keys, ctx.node_spec.nullable_output_keys
                 ),
+                # Execution narrative for better-informed custom judges
+                "execution_narrative": ctx.execution_narrative,
             }
             return await self._judge.evaluate(context)
 
@@ -1592,6 +1594,7 @@ class EventLoopNode(NodeProtocol):
                         success_criteria=ctx.node_spec.success_criteria,
                         accumulator_state=accumulator.to_dict(),
                         max_history_tokens=self._config.max_history_tokens,
+                        execution_narrative=ctx.execution_narrative,
                     )
                     if verdict.action != "ACCEPT":
                         return JudgeVerdict(
@@ -1704,6 +1707,11 @@ class EventLoopNode(NodeProtocol):
         """
         parts = []
         seen: set[str] = set()
+
+        # In isolated mode, include execution narrative for continuity
+        if not ctx.continuous_mode and ctx.execution_narrative:
+            parts.append(f"Previous phases context:\n{ctx.execution_narrative}\n")
+
         # Include everything from input_data (flexible handoff)
         for key, value in ctx.input_data.items():
             if value is not None:
