@@ -43,6 +43,7 @@ class NodeStepLog(BaseModel):
     tool_calls: list[ToolCallLog] = Field(default_factory=list)
     input_tokens: int = 0
     output_tokens: int = 0
+    model: str = ""  # LLM model used for this step
     latency_ms: int = 0
     # EventLoopNode only:
     verdict: str = ""  # "ACCEPT"|"RETRY"|"ESCALATE"|"CONTINUE"
@@ -79,6 +80,7 @@ class NodeDetail(BaseModel):
     tokens_used: int = 0  # combined input+output from NodeResult
     input_tokens: int = 0
     output_tokens: int = 0
+    model: str = ""  # LLM model used by this node
     latency_ms: int = 0
     attempt: int = 1  # retry attempt number
     # EventLoopNode-specific:

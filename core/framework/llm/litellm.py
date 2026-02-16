@@ -865,6 +865,13 @@ class LiteLLMProvider(LLMProvider):
                 async for chunk in response:
                     choice = chunk.choices[0] if chunk.choices else None
                     if not choice:
+                        # OpenAI (and compatible providers) send usage in a
+                        # separate final chunk where choices=[].  Capture it
+                        # here so token counts are not lost.
+                        usage = getattr(chunk, "usage", None)
+                        if usage:
+                            input_tokens = getattr(usage, "prompt_tokens", 0) or 0
+                            output_tokens = getattr(usage, "completion_tokens", 0) or 0
                         continue
 
                     delta = choice.delta

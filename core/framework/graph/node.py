@@ -521,6 +521,9 @@ class NodeResult:
 
     # Metadata
     tokens_used: int = 0
+    input_tokens: int = 0
+    output_tokens: int = 0
+    model: str = ""
     latency_ms: int = 0
 
     # Pydantic validation errors (if any)
@@ -848,6 +851,8 @@ Keep the same JSON structure but with shorter content values.
         """Execute the LLM node."""
         import time
 
+        node_model = getattr(ctx.llm, "model", "") if ctx.llm else ""
+
         if ctx.llm is None:
             return NodeResult(success=False, error="LLM not available")
 
@@ -1117,6 +1122,7 @@ Keep the same JSON structure but with shorter content values.
                                         tool_calls=_captured_tool_calls,
                                         input_tokens=total_input_tokens,
                                         output_tokens=total_output_tokens,
+                                        model=node_model,
                                         latency_ms=latency_ms,
                                     )
                                     ctx.runtime_logger.log_node_complete(
@@ -1129,6 +1135,7 @@ Keep the same JSON structure but with shorter content values.
                                         tokens_used=total_input_tokens + total_output_tokens,
                                         input_tokens=total_input_tokens,
                                         output_tokens=total_output_tokens,
+                                        model=node_model,
                                         latency_ms=latency_ms,
                                     )
                                 return NodeResult(
@@ -1136,6 +1143,9 @@ Keep the same JSON structure but with shorter content values.
                                     error=error_msg,
                                     output=parsed,
                                     tokens_used=total_input_tokens + total_output_tokens,
+                                    input_tokens=total_input_tokens,
+                                    output_tokens=total_output_tokens,
+                                    model=node_model,
                                     latency_ms=latency_ms,
                                     validation_errors=validation_result.errors,
                                 )
@@ -1233,6 +1243,7 @@ Keep the same JSON structure but with shorter content values.
                             tool_calls=_captured_tool_calls,
                             input_tokens=response.input_tokens,
                             output_tokens=response.output_tokens,
+                            model=node_model,
                             latency_ms=latency_ms,
                         )
                         ctx.runtime_logger.log_node_complete(
@@ -1245,6 +1256,7 @@ Keep the same JSON structure but with shorter content values.
                             tokens_used=response.input_tokens + response.output_tokens,
                             input_tokens=response.input_tokens,
                             output_tokens=response.output_tokens,
+                            model=node_model,
                             latency_ms=latency_ms,
                         )
                     return NodeResult(
@@ -1252,6 +1264,9 @@ Keep the same JSON structure but with shorter content values.
                         error=_extraction_error,
                         output={},
                         tokens_used=total_input_tokens + total_output_tokens,
+                        input_tokens=total_input_tokens,
+                        output_tokens=total_output_tokens,
+                        model=node_model,
                         latency_ms=latency_ms,
                     )
                     # JSON extraction failed completely - still strip code blocks
@@ -1276,6 +1291,7 @@ Keep the same JSON structure but with shorter content values.
                     tool_calls=_captured_tool_calls,
                     input_tokens=response.input_tokens,
                     output_tokens=response.output_tokens,
+                    model=node_model,
                     latency_ms=latency_ms,
                 )
                 ctx.runtime_logger.log_node_complete(
@@ -1287,6 +1303,7 @@ Keep the same JSON structure but with shorter content values.
                     tokens_used=response.input_tokens + response.output_tokens,
                     input_tokens=response.input_tokens,
                     output_tokens=response.output_tokens,
+                    model=node_model,
                     latency_ms=latency_ms,
                 )
 
@@ -1294,6 +1311,9 @@ Keep the same JSON structure but with shorter content values.
                 success=True,
                 output=output,
                 tokens_used=total_input_tokens + total_output_tokens,
+                input_tokens=total_input_tokens,
+                output_tokens=total_output_tokens,
+                model=node_model,
                 latency_ms=latency_ms,
             )
 
@@ -1312,9 +1332,10 @@ Keep the same JSON structure but with shorter content values.
                     node_type=ctx.node_spec.node_type,
                     success=False,
                     error=str(e),
+                    model=node_model,
                     latency_ms=latency_ms,
                 )
-            return NodeResult(success=False, error=str(e), latency_ms=latency_ms)
+            return NodeResult(success=False, error=str(e), model=node_model, latency_ms=latency_ms)
 
     def _parse_output(self, content: str, node_spec: NodeSpec) -> dict[str, Any]:
         """

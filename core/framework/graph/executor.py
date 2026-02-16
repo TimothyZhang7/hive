@@ -48,6 +48,8 @@ class ExecutionResult:
     error: str | None = None
     steps_executed: int = 0
     total_tokens: int = 0
+    total_input_tokens: int = 0
+    total_output_tokens: int = 0
     total_latency_ms: int = 0
     path: list[str] = field(default_factory=list)  # Node IDs traversed
     paused_at: str | None = None  # Node ID where execution paused for HITL
@@ -348,6 +350,8 @@ class GraphExecutor:
 
         path: list[str] = []
         total_tokens = 0
+        total_input_tokens = 0
+        total_output_tokens = 0
         total_latency = 0
         node_retry_counts: dict[str, int] = {}  # Track retries per node
         node_visit_counts: dict[str, int] = {}  # Track visits for feedback loops
@@ -762,6 +766,9 @@ class GraphExecutor:
                         success=result.success,
                         error=result.error,
                         tokens_used=result.tokens_used,
+                        input_tokens=result.input_tokens,
+                        output_tokens=result.output_tokens,
+                        model=result.model,
                         latency_ms=result.latency_ms,
                     )
 
@@ -821,6 +828,8 @@ class GraphExecutor:
                     self.logger.error(f"   ✗ Failed: {result.error}")
 
                 total_tokens += result.tokens_used
+                total_input_tokens += result.input_tokens
+                total_output_tokens += result.output_tokens
                 total_latency += result.latency_ms
 
                 # Handle failure
@@ -939,6 +948,8 @@ class GraphExecutor:
                                 output=saved_memory,
                                 steps_executed=steps,
                                 total_tokens=total_tokens,
+                                total_input_tokens=total_input_tokens,
+                                total_output_tokens=total_output_tokens,
                                 total_latency_ms=total_latency,
                                 path=path,
                                 total_retries=total_retries_count,
@@ -997,6 +1008,8 @@ class GraphExecutor:
                         output=saved_memory,
                         steps_executed=steps,
                         total_tokens=total_tokens,
+                        total_input_tokens=total_input_tokens,
+                        total_output_tokens=total_output_tokens,
                         total_latency_ms=total_latency,
                         path=path,
                         paused_at=node_spec.id,
@@ -1067,6 +1080,8 @@ class GraphExecutor:
                         (
                             _branch_results,
                             branch_tokens,
+                            branch_input_tokens,
+                            branch_output_tokens,
                             branch_latency,
                         ) = await self._execute_parallel_branches(
                             graph=graph,
@@ -1079,6 +1094,8 @@ class GraphExecutor:
                         )
 
                         total_tokens += branch_tokens
+                        total_input_tokens += branch_input_tokens
+                        total_output_tokens += branch_output_tokens
                         total_latency += branch_latency
 
                         # Continue from fan-in node
@@ -1271,6 +1288,8 @@ class GraphExecutor:
                 output=output,
                 steps_executed=steps,
                 total_tokens=total_tokens,
+                total_input_tokens=total_input_tokens,
+                total_output_tokens=total_output_tokens,
                 total_latency_ms=total_latency,
                 path=path,
                 total_retries=total_retries_count,
@@ -1318,6 +1337,8 @@ class GraphExecutor:
                 output=saved_memory,
                 steps_executed=steps,
                 total_tokens=total_tokens,
+                total_input_tokens=total_input_tokens,
+                total_output_tokens=total_output_tokens,
                 total_latency_ms=total_latency,
                 path=path,
                 paused_at=current_node_id,  # Save where we were
@@ -1403,6 +1424,9 @@ class GraphExecutor:
                 error=str(e),
                 output=saved_memory,
                 steps_executed=steps,
+                total_tokens=total_tokens,
+                total_input_tokens=total_input_tokens,
+                total_output_tokens=total_output_tokens,
                 path=path,
                 total_retries=total_retries_count,
                 nodes_with_failures=nodes_failed,
@@ -1873,6 +1897,9 @@ class GraphExecutor:
                             success=result.success,
                             error=result.error,
                             tokens_used=result.tokens_used,
+                            input_tokens=result.input_tokens,
+                            output_tokens=result.output_tokens,
+                            model=result.model,
                             latency_ms=result.latency_ms,
                         )
 
@@ -1937,6 +1964,8 @@ class GraphExecutor:
 
         # Process results
         total_tokens = 0
+        total_input_tokens = 0
+        total_output_tokens = 0
         total_latency = 0
         branch_results: dict[str, NodeResult] = {}
         failed_branches: list[ParallelBranch] = []
@@ -1950,6 +1979,8 @@ class GraphExecutor:
                 failed_branches.append(branch)
             else:
                 total_tokens += result.tokens_used
+                total_input_tokens += result.input_tokens
+                total_output_tokens += result.output_tokens
                 total_latency += result.latency_ms
                 branch_results[branch.branch_id] = result
 
@@ -1966,7 +1997,7 @@ class GraphExecutor:
         self.logger.info(
             f"   ⑃ Fan-out complete: {len(branch_results)}/{len(branches)} branches succeeded"
         )
-        return branch_results, total_tokens, total_latency
+        return branch_results, total_tokens, total_input_tokens, total_output_tokens, total_latency
 
     def register_node(self, node_id: str, implementation: NodeProtocol) -> None:
         """Register a custom node implementation."""

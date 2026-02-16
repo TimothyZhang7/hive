@@ -233,6 +233,11 @@ class SessionState(BaseModel):
                 error=result.error,
                 output=result.output,
             ),
+            metrics=SessionMetrics(
+                total_input_tokens=result.total_input_tokens,
+                total_output_tokens=result.total_output_tokens,
+                nodes_executed=result.path,
+            ),
             memory=result.session_state.get("memory", {}) if result.session_state else {},
             input_data=input_data or {},
         )

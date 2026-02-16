@@ -230,6 +230,7 @@ class EventLoopNode(NodeProtocol):
         total_output_tokens = 0
         stream_id = ctx.node_id
         node_id = ctx.node_id
+        node_model = getattr(ctx.llm, "model", "") if ctx.llm else ""
 
         # Verdict counters for runtime logging
         _accept_count = _retry_count = _escalate_count = _continue_count = 0
@@ -250,9 +251,10 @@ class EventLoopNode(NodeProtocol):
                     tokens_used=0,
                     input_tokens=0,
                     output_tokens=0,
+                    model=node_model,
                     latency_ms=0,
                 )
-            return NodeResult(success=False, error=error_msg)
+            return NodeResult(success=False, error=error_msg, model=node_model)
 
         # 2. Restore or create new conversation + accumulator
         # Track whether we're in continuous mode (conversation threaded across nodes)
@@ -340,6 +342,7 @@ class EventLoopNode(NodeProtocol):
                         tokens_used=total_input_tokens + total_output_tokens,
                         input_tokens=total_input_tokens,
                         output_tokens=total_output_tokens,
+                        model=node_model,
                         latency_ms=latency_ms,
                         exit_status="paused",
                         accept_count=_accept_count,
@@ -351,6 +354,9 @@ class EventLoopNode(NodeProtocol):
                     success=True,
                     output=accumulator.to_dict(),
                     tokens_used=total_input_tokens + total_output_tokens,
+                    input_tokens=total_input_tokens,
+                    output_tokens=total_output_tokens,
+                    model=node_model,
                     latency_ms=latency_ms,
                     conversation=conversation if _is_continuous else None,
                 )
@@ -454,6 +460,7 @@ class EventLoopNode(NodeProtocol):
                             is_partial=True,
                             input_tokens=0,
                             output_tokens=0,
+                            model=node_model,
                             latency_ms=iter_latency_ms,
                         )
                         ctx.runtime_logger.log_node_complete(
@@ -467,6 +474,7 @@ class EventLoopNode(NodeProtocol):
                             tokens_used=total_input_tokens + total_output_tokens,
                             input_tokens=total_input_tokens,
                             output_tokens=total_output_tokens,
+                            model=node_model,
                             latency_ms=latency_ms,
                             exit_status="failure",
                             accept_count=_accept_count,
@@ -514,6 +522,9 @@ class EventLoopNode(NodeProtocol):
                         success=True,
                         output=accumulator.to_dict(),
                         tokens_used=total_input_tokens + total_output_tokens,
+                        input_tokens=total_input_tokens,
+                        output_tokens=total_output_tokens,
+                        model=node_model,
                         latency_ms=latency_ms,
                         conversation=conversation if _is_continuous else None,
                     )
@@ -538,6 +549,7 @@ class EventLoopNode(NodeProtocol):
                         llm_text=assistant_text,
                         input_tokens=turn_tokens.get("input", 0),
                         output_tokens=turn_tokens.get("output", 0),
+                        model=node_model,
                         latency_ms=iter_latency_ms,
                     )
                     ctx.runtime_logger.log_node_complete(
@@ -550,6 +562,7 @@ class EventLoopNode(NodeProtocol):
                         tokens_used=total_input_tokens + total_output_tokens,
                         input_tokens=total_input_tokens,
                         output_tokens=total_output_tokens,
+                        model=node_model,
                         latency_ms=latency_ms,
                         exit_status="stalled",
                         accept_count=_accept_count,
@@ -565,6 +578,9 @@ class EventLoopNode(NodeProtocol):
                     ),
                     output=accumulator.to_dict(),
                     tokens_used=total_input_tokens + total_output_tokens,
+                    input_tokens=total_input_tokens,
+                    output_tokens=total_output_tokens,
+                    model=node_model,
                     latency_ms=latency_ms,
                     conversation=conversation if _is_continuous else None,
                 )
@@ -671,6 +687,7 @@ class EventLoopNode(NodeProtocol):
                             tokens_used=total_input_tokens + total_output_tokens,
                             input_tokens=total_input_tokens,
                             output_tokens=total_output_tokens,
+                            model=node_model,
                             latency_ms=latency_ms,
                             exit_status="success",
                             accept_count=_accept_count,
@@ -682,6 +699,9 @@ class EventLoopNode(NodeProtocol):
                         success=True,
                         output=accumulator.to_dict(),
                         tokens_used=total_input_tokens + total_output_tokens,
+                        input_tokens=total_input_tokens,
+                        output_tokens=total_output_tokens,
+                        model=node_model,
                         latency_ms=latency_ms,
                         conversation=conversation if _is_continuous else None,
                     )
@@ -721,6 +741,7 @@ class EventLoopNode(NodeProtocol):
                             tokens_used=total_input_tokens + total_output_tokens,
                             input_tokens=total_input_tokens,
                             output_tokens=total_output_tokens,
+                            model=node_model,
                             latency_ms=latency_ms,
                             exit_status="success",
                             accept_count=_accept_count,
@@ -732,6 +753,9 @@ class EventLoopNode(NodeProtocol):
                         success=True,
                         output=accumulator.to_dict(),
                         tokens_used=total_input_tokens + total_output_tokens,
+                        input_tokens=total_input_tokens,
+                        output_tokens=total_output_tokens,
+                        model=node_model,
                         latency_ms=latency_ms,
                         conversation=conversation if _is_continuous else None,
                     )
@@ -784,6 +808,7 @@ class EventLoopNode(NodeProtocol):
                         llm_text=assistant_text,
                         input_tokens=turn_tokens.get("input", 0),
                         output_tokens=turn_tokens.get("output", 0),
+                        model=node_model,
                         latency_ms=iter_latency_ms,
                     )
                 continue
@@ -871,6 +896,7 @@ class EventLoopNode(NodeProtocol):
                         llm_text=assistant_text,
                         input_tokens=turn_tokens.get("input", 0),
                         output_tokens=turn_tokens.get("output", 0),
+                        model=node_model,
                         latency_ms=iter_latency_ms,
                     )
                     ctx.runtime_logger.log_node_complete(
@@ -882,6 +908,7 @@ class EventLoopNode(NodeProtocol):
                         tokens_used=total_input_tokens + total_output_tokens,
                         input_tokens=total_input_tokens,
                         output_tokens=total_output_tokens,
+                        model=node_model,
                         latency_ms=latency_ms,
                         exit_status="success",
                         accept_count=_accept_count,
@@ -893,6 +920,9 @@ class EventLoopNode(NodeProtocol):
                     success=True,
                     output=accumulator.to_dict(),
                     tokens_used=total_input_tokens + total_output_tokens,
+                    input_tokens=total_input_tokens,
+                    output_tokens=total_output_tokens,
+                    model=node_model,
                     latency_ms=latency_ms,
                     conversation=conversation if _is_continuous else None,
                 )
@@ -914,6 +944,7 @@ class EventLoopNode(NodeProtocol):
                         llm_text=assistant_text,
                         input_tokens=turn_tokens.get("input", 0),
                         output_tokens=turn_tokens.get("output", 0),
+                        model=node_model,
                         latency_ms=iter_latency_ms,
                     )
                     ctx.runtime_logger.log_node_complete(
@@ -926,6 +957,7 @@ class EventLoopNode(NodeProtocol):
                         tokens_used=total_input_tokens + total_output_tokens,
                         input_tokens=total_input_tokens,
                         output_tokens=total_output_tokens,
+                        model=node_model,
                         latency_ms=latency_ms,
                         exit_status="escalated",
                         accept_count=_accept_count,
@@ -938,6 +970,9 @@ class EventLoopNode(NodeProtocol):
                     error=f"Judge escalated: {verdict.feedback}",
                     output=accumulator.to_dict(),
                     tokens_used=total_input_tokens + total_output_tokens,
+                    input_tokens=total_input_tokens,
+                    output_tokens=total_output_tokens,
+                    model=node_model,
                     latency_ms=latency_ms,
                     conversation=conversation if _is_continuous else None,
                 )
@@ -956,6 +991,7 @@ class EventLoopNode(NodeProtocol):
                         llm_text=assistant_text,
                         input_tokens=turn_tokens.get("input", 0),
                         output_tokens=turn_tokens.get("output", 0),
+                        model=node_model,
                         latency_ms=iter_latency_ms,
                     )
                 if verdict.feedback:
@@ -976,6 +1012,7 @@ class EventLoopNode(NodeProtocol):
                 tokens_used=total_input_tokens + total_output_tokens,
                 input_tokens=total_input_tokens,
                 output_tokens=total_output_tokens,
+                model=node_model,
                 latency_ms=latency_ms,
                 exit_status="failure",
                 accept_count=_accept_count,
@@ -988,6 +1025,9 @@ class EventLoopNode(NodeProtocol):
             error=(f"Max iterations ({self._config.max_iterations}) reached without acceptance"),
             output=accumulator.to_dict(),
             tokens_used=total_input_tokens + total_output_tokens,
+            input_tokens=total_input_tokens,
+            output_tokens=total_output_tokens,
+            model=node_model,
             latency_ms=latency_ms,
             conversation=conversation if _is_continuous else None,
         )

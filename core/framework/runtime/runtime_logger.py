@@ -86,6 +86,7 @@ class RuntimeLogger:
         tool_calls: list[dict[str, Any]] | None = None,
         input_tokens: int = 0,
         output_tokens: int = 0,
+        model: str = "",
         latency_ms: int = 0,
         verdict: str = "",
         verdict_feedback: str = "",
@@ -131,6 +132,7 @@ class RuntimeLogger:
             tool_calls=call_logs,
             input_tokens=input_tokens,
             output_tokens=output_tokens,
+            model=model,
             latency_ms=latency_ms,
             verdict=verdict,
             verdict_feedback=verdict_feedback,
@@ -157,6 +159,7 @@ class RuntimeLogger:
         tokens_used: int = 0,
         input_tokens: int = 0,
         output_tokens: int = 0,
+        model: str = "",
         latency_ms: int = 0,
         attempt: int = 1,
         # EventLoopNode-specific kwargs:
@@ -214,6 +217,7 @@ class RuntimeLogger:
             tokens_used=tokens_used,
             input_tokens=input_tokens,
             output_tokens=output_tokens,
+            model=model,
             latency_ms=latency_ms,
             attempt=attempt,
             exit_status=exit_status,
@@ -240,6 +244,9 @@ class RuntimeLogger:
         error: str | None = None,
         stacktrace: str = "",
         tokens_used: int = 0,
+        input_tokens: int = 0,
+        output_tokens: int = 0,
+        model: str = "",
         latency_ms: int = 0,
     ) -> None:
         """Fallback: ensure a node has an L2 entry.
@@ -261,6 +268,9 @@ class RuntimeLogger:
             error=error,
             stacktrace=stacktrace,
             tokens_used=tokens_used,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            model=model,
             latency_ms=latency_ms,
         )
 
@@ -319,6 +329,21 @@ class RuntimeLogger:
                 status,
                 len(node_details),
             )
+
+            # Generate cost.json alongside state.json
+            try:
+                from framework.runtime.cost_reporter import generate_cost_report
+
+                run_dir = self._store._get_run_dir(self._run_id)
+                # run_dir is the logs/ dir; session_dir is its parent
+                session_dir = run_dir.parent
+                generate_cost_report(session_dir, self._run_id)
+            except Exception:
+                logger.debug(
+                    "Cost report generation failed for run_id=%s (non-fatal)",
+                    self._run_id,
+                    exc_info=True,
+                )
         except Exception:
             logger.exception(
                 "Failed to save runtime logs for run_id=%s (non-fatal)",
